@@ -1,7 +1,22 @@
+const {
+  flow,
+  map,
+  pick,
+  filter,
+  sortBy,
+  groupBy,
+  mapValues,
+} = require('lodash/fp');
+
 export default class FilterBuilder {
-  constructor(data) {
-    this.data = data;
-    this.query = '';
+  constructor() {
+    this.resetQuery();
+  }
+
+  select(keys) {
+    // this.flow.push(map((x) => pick(keys)(x)));
+    this.selectKeys = [...new Set([...this.selectKeys, ...keys])];
+    return this;
   }
 
   where(...query) {
@@ -14,9 +29,13 @@ export default class FilterBuilder {
       if (query.length === 1) {
         this.query += `(item.${query[0]})`;
       } else if (query.length === 2) {
-        this.query += `(item.${query[0]} == ${typeof query[1] === 'string' ? '"' + query[1] + '"' : query[1]})`;
+        this.query += `(item.${query[0]} == ${
+          typeof query[1] === 'string' ? '"' + query[1] + '"' : query[1]
+        })`;
       } else if (query.length === 3) {
-        this.query += `(item.${query[0]} ${query[1]} ${typeof query[2] === 'string' ? '"' + query[2] + '"' : query[2]})`;
+        this.query += `(item.${query[0]} ${query[1]} ${
+          typeof query[2] === 'string' ? '"' + query[2] + '"' : query[2]
+        })`;
       }
     }
     return this;
@@ -75,14 +94,44 @@ export default class FilterBuilder {
     }
   }
 
-  stripEmpties() {
+  sort(keys) {
+    // this.flow.push(sortBy(keys));
+    this.sortKeys = [...new Set([...this.sortKeys, ...keys])];
+    return this;
+  }
+
+  group(keys) {
+    this.groupKeys = [...new Set([...this.groupKeys, ...keys])];
+    return this;
+  }
+
+  #nest = (key) => (array) => {
+    if (!key.length) return array;
+    const first = key[0];
+    const rest = key.slice(1);
+    return mapValues((x) => this.#nest(rest)(x))(groupBy(first)(array));
+  };
+
+  #stripEmpties() {
     this.query = this.query.replace(/&& \(\)/g, '');
     this.query = this.query.replace(/\(\)\s\s&&/g, '');
     this.query = this.query.replace(/\(\)\s&&/g, '');
   }
 
-  get() {
-    this.stripEmpties();
-    return this.data.filter((item) => new Function('item', `'use strict';return ${this.query};`)(item));
+  get(data) {
+    this.#stripEmpties();
+    return flow(
+      filter((item) => new Function('item', `'use strict';return ${this.query};`)(item)),
+      map((x) => pick(this.selectKeys)(x)), // this for select
+      sortBy(this.sortKeys), // this for sort
+      this.#nest(this.groupKeys), // this for group
+    )(data);
+  }
+
+  resetQuery() {
+    this.query = '';
+    this.selectKeys = [];
+    this.sortKeys = [];
+    this.groupKeys = [];
   }
 }
