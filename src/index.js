@@ -120,11 +120,22 @@ export default class FilterBuilder {
 
   get(data) {
     this.#stripEmpties();
+    const flows = [];
+    if (this.selectKeys.length) {
+      flows.push(map((x) => pick(this.selectKeys)(x)));
+    }
+    if (this.sortKeys.length) {
+      flows.push(sortBy(this.sortKeys));
+    }
+    if (this.groupKeys.length) {
+      flows.push(this.#nest(this.groupKeys));
+    }
     return flow(
       filter((item) => new Function('item', `'use strict';return ${this.query};`)(item)),
-      map((x) => pick(this.selectKeys)(x)), // this for select
-      sortBy(this.sortKeys), // this for sort
-      this.#nest(this.groupKeys), // this for group
+      // map((x) => pick(this.selectKeys)(x)), // this for select
+      // sortBy(this.sortKeys), // this for sort
+      // this.#nest(this.groupKeys), // this for group
+      ...flows,
     )(data);
   }
 
